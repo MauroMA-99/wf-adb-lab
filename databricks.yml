@@ -1,0 +1,52 @@
+bundle:
+  name: wf_adb
+
+variables:
+  esquema:
+    description: Esquema destino; cambia en cada entorno
+    default: repaso_dev
+
+resources:
+  jobs:
+    wf_adb:
+      name: WF_ADB
+      max_concurrent_runs: 1
+      timeout_seconds: 7200
+      tags:
+        project: automated_deployment
+      schedule:
+        quartz_cron_schedule: '0 0 8 * * ?'
+        timezone_id: America/Lima
+        pause_status: UNPAUSED
+      tasks:
+        - task_key: tarea1_notebook1
+          notebook_task:
+            notebook_path: ./src/ntbk_1.py
+            base_parameters:
+              esquema: ${var.esquema}
+          timeout_seconds: 3600
+          max_retries: 2
+        - task_key: tarea2_notebook2
+          depends_on:
+            - task_key: tarea1_notebook1
+          notebook_task:
+            notebook_path: ./src/ntbk_2.py
+            base_parameters:
+              esquema: ${var.esquema}
+          timeout_seconds: 3600
+          max_retries: 2
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://TU-WORKSPACE.cloud.databricks.com
+    variables:
+      esquema: repaso_dev
+  prod:
+    workspace:
+      host: https://TU-WORKSPACE.cloud.databricks.com
+    variables:
+      esquema: repaso_prod
+

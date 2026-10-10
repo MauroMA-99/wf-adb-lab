@@ -1,0 +1,71 @@
+name: Despliegue artesanal
+on:
+  workflow_dispatch:          # lo disparas a mano desde la pestaña Actions
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      HOST: ${{ secrets.DATABRICKS_HOST }}
+      TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y jq curl
+
+      - name: Exportar notebooks desde la carpeta de origen
+        run: |
+          BASE="/Workspace/Users/${{ secrets.DATABRICKS_USER }}/source_ntbk"
+          mkdir -p nb
+          for n in ntbk_1 ntbk_2; do
+            curl -sS --fail -H "Authorization: Bearer $TOKEN" \
+              "$HOST/api/2.0/workspace/export?path=$BASE/$n&format=SOURCE&direct_download=true" \
+              --output "nb/$n.py"
+          done
+
+      - name: Importar a la carpeta de destino
+        run: |
+          DEST="/Shared/py/scripts/main"
+          curl -sS -X POST -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" -d "{\"path\":\"$DEST\"}" \
+            "$HOST/api/2.0/workspace/mkdirs"
+          for f in nb/*.py; do
+            n=$(basename "$f" .py)
+            curl -sS -X POST -H "Authorization: Bearer $TOKEN" \
+              -F "path=$DEST/$n" -F "format=SOURCE" -F "language=PYTHON" \
+              -F "overwrite=true" -F "content=@$f" \
+              "$HOST/api/2.0/workspace/import"
+          done
+
+      - name: Borrar el job si existe y volver a crearlo
+        run: |
+          lista=$(curl -sS -H "Authorization: Bearer $TOKEN" "$HOST/api/2.1/jobs/list")
+          id=$(echo "$lista" | jq -r '.jobs[]? | select(.settings.name == "WF_ADB_ARTESANAL") | .job_id')
+          if [ -n "$id" ] && [ "$id" != "null" ]; then
+            echo "Borrando job $id"
+            curl -sS -X POST -H "Authorization: Bearer $TOKEN" \
+              -H "Content-Type: application/json" -d "{\"job_id\": $id}" \
+              "$HOST/api/2.1/jobs/delete"
+          fi
+          cat > job.json <<'EOF'
+          {
+            "name": "WF_ADB_ARTESANAL",
+            "format": "MULTI_TASK",
+            "max_concurrent_runs": 1,
+            "tasks": [
+              {"task_key": "tarea1",
+               "notebook_task": {"notebook_path": "/Shared/py/scripts/main/ntbk_1",
+                                 "source": "WORKSPACE",
+                                 "base_parameters": {"esquema": "repaso_artesanal"}},
+               "max_retries": 2},
+              {"task_key": "tarea2",
+               "depends_on": [{"task_key": "tarea1"}],
+               "notebook_task": {"notebook_path": "/Shared/py/scripts/main/ntbk_2",
+                                 "source": "WORKSPACE",
+                                 "base_parameters": {"esquema": "repaso_artesanal"}},
+               "max_retries": 2}
+            ]
+          }
+          EOF
+          resp=$(curl -sS -X POST -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" -d @job.json \
+            "$HOST/api/2.1/jobs/create")
+          echo "$resp" | jq -r '.job_id'
