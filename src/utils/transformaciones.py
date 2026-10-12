@@ -6,7 +6,7 @@ def clasificar_monto(df):
     return df.withColumn(
         'categoria',
         F.when(F.col('monto') >= 1000, 'alto')
-         .when(F.col('monto') >= 100, 'medio')
+         .when(F.col('monto') >= 10, 'medio')
          .otherwise('bajo')
     )
     
