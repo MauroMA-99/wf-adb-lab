@@ -15,7 +15,7 @@ resources:
       tags:
         project: automated_deployment
       schedule:
-        quartz_cron_schedule: '0 0 8 * * ?'
+        quartz_cron_expression: '0 0 8 * * ?'
         timezone_id: America/Lima
         pause_status: UNPAUSED
       tasks:
@@ -41,12 +41,13 @@ targets:
     mode: development
     default: true
     workspace:
-      host: https://TU-WORKSPACE.cloud.databricks.com
+      host: https://dbc-3c234064-bc56.cloud.databricks.com
+      profile: free
     variables:
       esquema: repaso_dev
   prod:
     workspace:
-      host: https://TU-WORKSPACE.cloud.databricks.com
+      host: https://dbc-3c234064-bc56.cloud.databricks.com
+      profile: free
     variables:
       esquema: repaso_prod
-

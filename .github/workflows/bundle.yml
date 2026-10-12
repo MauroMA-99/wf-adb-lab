@@ -1,16 +1,45 @@
-name: Deploy WF_ADB con bundle
+name: CI/CD con bundle
+
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
+
 jobs:
-  deploy:
+  pruebas:
+    name: Pruebas unitarias
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: pip install -r requirements-dev.txt
+
+      - name: Ejecutar pytest
+        run: pytest tests/ -v
+
+  desplegar:
+    name: Desplegar a produccion
+    needs: pruebas
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     env:
       DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
       DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+
       - uses: databricks/setup-cli@main
-      - run: databricks bundle validate -t prod
-      - run: databricks bundle deploy -t prod
-      
+
+      - name: Validar el bundle
+        run: databricks bundle validate -t prod
+
+      - name: Desplegar
+        run: databricks bundle deploy -t prod
+  
+
